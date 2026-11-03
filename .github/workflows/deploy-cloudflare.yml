@@ -258,9 +258,15 @@ jobs:
             exit 1
           fi
 
-      - name: 🗑️ 删除运行记录 / Delete workflow runs
-        uses: GitRML/delete-workflow-runs@main
-        continue-on-error: true
-        with:
-          retain_days: '1'
-          keep_minimum_runs: '0'
+      - name: 🗑️ 删除运行记录 / Delete old workflow runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          cutoff=$(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%SZ)
+          gh api --paginate "repos/$REPO/actions/runs?per_page=100" \
+            --jq ".workflow_runs[] | select(.created_at < \"$cutoff\") | select(.id != ${{ github.run_id }}) | .id" |
+          while read -r id; do
+            echo "Deleting run $id"
+            gh api -X DELETE "repos/$REPO/actions/runs/$id" || true
+          done
